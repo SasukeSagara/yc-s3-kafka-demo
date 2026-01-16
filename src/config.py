@@ -1,18 +1,60 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+"""Конфигурация приложения"""
+
+from pydantic import Field, field_validator  # type: ignore[import-untyped]
+from pydantic_settings import (  # type: ignore[import-untyped]
+    BaseSettings,
+    SettingsConfigDict,
+)
 
 
 class Configuration(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    """Конфигурация приложения"""
 
-    key_id: str
-    key_secret: str
-    bucket_name: str
-    account_id: str
-    # Интервал поллинга в секундах
-    poll_interval: int = 60
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    # Yandex Cloud S3 настройки
+    key_id: str = Field(..., description="Access Key ID для Yandex Cloud")
+    key_secret: str = Field(..., description="Secret Access Key для Yandex Cloud")
+    bucket_name: str = Field(..., description="Имя S3 бакета для мониторинга")
+    account_id: str = Field(..., description="ID аккаунта Yandex Cloud")
+    s3_endpoint: str = Field(
+        default="https://storage.yandexcloud.net",
+        description="URL endpoint для S3",
+    )
+
+    # Настройки поллинга
+    poll_interval: int = Field(
+        default=60,
+        ge=1,
+        description="Интервал поллинга в секундах",
+    )
+
     # Настройки Kafka
-    kafka_brokers: str
-    kafka_topic: str
+    kafka_brokers: str = Field(..., description="Список Kafka брокеров через запятую")
+    kafka_topic: str = Field(
+        ..., description="Имя Kafka топика для отправки уведомлений"
+    )
+
+    # Настройки логирования
+    log_level: str = Field(
+        default="INFO",
+        description="Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+    )
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, v: str) -> str:
+        """Валидирует уровень логирования"""
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        v_upper = v.upper()
+        if v_upper not in valid_levels:
+            raise ValueError(f"log_level должен быть одним из: {valid_levels}")
+        return v_upper
+
+    @property
+    def kafka_brokers_list(self) -> list[str]:
+        """Возвращает список Kafka брокеров"""
+        return [broker.strip() for broker in self.kafka_brokers.split(",")]
 
 
 CONFIG = Configuration()
