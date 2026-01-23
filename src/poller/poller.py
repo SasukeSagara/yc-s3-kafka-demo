@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List
 
-from src.kafka.producer import KafkaProducerClient
+from src.kafka_m import KafkaProducerClient
 from src.s3.client import S3Client
 from src.s3.scanner import S3Scanner
 
@@ -21,6 +21,7 @@ class S3Poller:
         bucket_name: str,
         kafka_producer: KafkaProducerClient,
         poll_interval: int = 60,
+        file_link_expiration: int = 3600,
     ):
         """
         Инициализация поллера
@@ -30,11 +31,13 @@ class S3Poller:
             bucket_name: Имя бакета для сканирования
             kafka_producer: Клиент для отправки сообщений в Kafka
             poll_interval: Интервал сканирования в секундах
+            file_link_expiration: Время жизни presigned URL в секундах
         """
         self._s3_client = s3_client
         self._bucket_name = bucket_name
         self._kafka_producer = kafka_producer
         self._poll_interval = poll_interval
+        self._file_link_expiration = file_link_expiration
         self._scanner: S3Scanner | None = None
 
     def _get_scanner(self) -> S3Scanner:
@@ -54,7 +57,7 @@ class S3Poller:
 
         try:
             while True:
-                logger.info(
+                logger.debug(
                     f"[{datetime.now().astimezone().isoformat()}] Начало сканирования..."
                 )
 
@@ -63,7 +66,7 @@ class S3Poller:
                 updated_files = scanner.scan_updated_files(last_scan_time)
 
                 if updated_files:
-                    logger.info(f"Найдено {len(updated_files)} обновленных файлов")
+                    logger.info(f"Найдено {len(updated_files)} обновленных файлов:")
                     self._process_files(updated_files)
 
                     # Отправляем в Kafka
@@ -96,8 +99,6 @@ class S3Poller:
         for file_info in files:
             # Генерируем presigned URL для каждого файла
             file_info["url"] = self._s3_client.generate_presigned_url(
-                self._bucket_name, file_info["key"]
+                self._bucket_name, file_info["key"], expiration=self._file_link_expiration
             )
-            logger.info(
-                f"  - {file_info['key']} (изменен: {file_info['last_modified']})"
-            )
+            logger.info(f"\t{file_info['key']} (изменен: {file_info['last_modified']})")

@@ -5,8 +5,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
-from kafka import KafkaProducer  # type: ignore[import-untyped]
-from kafka.errors import KafkaError  # type: ignore[import-untyped]
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+
 from src.models.types import KafkaMessage
 from src.utils.retry import retry
 
@@ -66,7 +67,7 @@ class KafkaProducerClient:
 
             # Ждем подтверждения
             record_metadata = future.get(timeout=10)
-            logger.info(
+            logger.debug(
                 f"Отправлено {len(files)} файлов в топик {self._topic}, "
                 f"partition: {record_metadata.partition}, "
                 f"offset: {record_metadata.offset}"

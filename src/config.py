@@ -29,6 +29,13 @@ class Configuration(BaseSettings):
         description="Интервал поллинга в секундах",
     )
 
+    # Время жизни сгенерированной ссылки на файл (presigned URL)
+    file_link_expiration: int = Field(
+        default=3600,
+        ge=1,
+        description="Время жизни presigned URL в секундах (по умолчанию 1 час)",
+    )
+
     # Настройки Kafka
     kafka_brokers: str = Field(..., description="Список Kafka брокеров через запятую")
     kafka_topic: str = Field(
@@ -40,11 +47,17 @@ class Configuration(BaseSettings):
         default="INFO",
         description="Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
     )
+    kafka_log_level: str | None = Field(
+        default=None,
+        description="Уровень для логгеров kafka.* (kafka.conn и др.). Пусто — как log_level.",
+    )
 
-    @field_validator("log_level")
+    @field_validator("log_level", "kafka_log_level")
     @classmethod
-    def validate_log_level(cls, v: str) -> str:
+    def validate_log_level(cls, v: str | None) -> str | None:
         """Валидирует уровень логирования"""
+        if v is None:
+            return None
         valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         v_upper = v.upper()
         if v_upper not in valid_levels:

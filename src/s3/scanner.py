@@ -53,7 +53,7 @@ class S3Scanner:
                     if file_info:
                         updated_files.append(file_info)
 
-            logger.info(f"Найдено {len(updated_files)} обновленных файлов")
+            logger.debug(f"Найдено {len(updated_files)} обновленных файлов")
 
         except Exception as e:
             logger.error(f"Ошибка при сканировании бакета: {e}", exc_info=True)

@@ -4,7 +4,7 @@ import logging
 import sys
 
 from src.config import CONFIG
-from src.kafka.producer import KafkaProducerClient
+from src.kafka_m import KafkaProducerClient
 from src.poller.poller import S3Poller
 from src.s3.client import S3Client
 from src.utils.logging import setup_logging
@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     """Главная функция приложения"""
     # Настройка логирования
-    setup_logging(level=CONFIG.log_level)
+    setup_logging(level=CONFIG.log_level, kafka_log_level=CONFIG.kafka_log_level)
 
     logger.info("Запуск S3 Poller")
     logger.info(f"Подключение к S3 бакету: {CONFIG.bucket_name}")
     logger.info(f"Kafka брокеры: {CONFIG.kafka_brokers_list}")
     logger.info(f"Kafka топик: {CONFIG.kafka_topic}")
     logger.info(f"Интервал поллинга: {CONFIG.poll_interval} секунд")
+    logger.info(f"Время жизни ссылки на файл: {CONFIG.file_link_expiration} секунд")
 
     # Инициализация S3 клиента
     s3_client = S3Client(
@@ -42,6 +43,7 @@ def main() -> None:
         bucket_name=CONFIG.bucket_name,
         kafka_producer=kafka_producer,
         poll_interval=CONFIG.poll_interval,
+        file_link_expiration=CONFIG.file_link_expiration,
     )
 
     try:
