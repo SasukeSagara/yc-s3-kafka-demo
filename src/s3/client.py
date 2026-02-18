@@ -1,6 +1,8 @@
 """Клиент для работы с S3"""
 
 import logging
+import ssl
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -8,41 +10,12 @@ from boto3.session import Session as BotoSession
 from botocore.client import BaseClient
 from botocore.config import Config
 
+from src.s3._sigv4_unsigned import build_put_url_and_path, sign_s3_put_unsigned
+
 logger = logging.getLogger(__name__)
 
-# Конфиг S3: отключаем подпись payload, чтобы отправлять x-amz-content-sha256: UNSIGNED-PAYLOAD
-# (требуется для части S3-совместимых бэкендов: Yandex Object Storage, MinIO за прокси и др.)
+# Конфиг S3: отключаем подпись payload для операций через boto3 (presigned URL и т.д.)
 _S3_CONFIG = Config(s3={"payload_signing_enabled": False})
-
-
-class _UnseekableReader:
-    """Обёртка над файлом без seek(), чтобы boto3 отправлял x-amz-content-sha256: UNSIGNED-PAYLOAD (совместимость с Yandex Object Storage и др.)."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._size = path.stat().st_size
-        self._file = open(path, "rb")
-
-    def read(self, size: int = -1) -> bytes:
-        return self._file.read(size)
-
-    def __len__(self) -> int:
-        return self._size
-
-    def __enter__(self) -> "_UnseekableReader":
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        self._file.close()
-
-    def __iter__(self) -> "_UnseekableReader":
-        return self
-
-    def __next__(self) -> bytes:
-        chunk = self._file.read(8192)
-        if not chunk:
-            raise StopIteration
-        return chunk
 
 
 class S3Client:
@@ -96,9 +69,8 @@ class S3Client:
         """
         Загружает файл в S3 бакет.
 
-        Используется put_object с потоком без seek(), чтобы отправлять
-        x-amz-content-sha256: UNSIGNED-PAYLOAD для совместимости с Yandex Object Storage
-        и другими S3-совместимыми бэкендами.
+        Используется HTTP PUT с подписью SigV4 и x-amz-content-sha256: UNSIGNED-PAYLOAD
+        для совместимости с Yandex Object Storage и другими S3-совместимыми бэкендами.
 
         Args:
             bucket_name: Имя бакета
@@ -112,15 +84,33 @@ class S3Client:
         if not path.is_file():
             raise FileNotFoundError(f"Файл не найден: {local_path}")
         key = object_key if object_key is not None else path.name
-        client = self.get_client()
-        size = path.stat().st_size
-        with _UnseekableReader(path) as body:
-            client.put_object(
-                Bucket=bucket_name,
-                Key=key,
-                Body=body,
-                ContentLength=size,
-            )
+
+        full_url, host, canonical_uri = build_put_url_and_path(
+            self._endpoint_url, bucket_name, key
+        )
+        _, _, headers = sign_s3_put_unsigned(
+            key_id=self._key_id,
+            key_secret=self._key_secret,
+            method="PUT",
+            url_path=canonical_uri,
+            host=host,
+        )
+        headers["Content-Length"] = str(path.stat().st_size)
+
+        body = path.read_bytes()
+        req = urllib.request.Request(
+            full_url,
+            data=body,
+            method="PUT",
+            headers=headers,
+        )
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, context=ssl_ctx) as resp:
+            if resp.status not in (200, 204):
+                raise OSError(f"PUT {full_url}: HTTP {resp.status}")
+
         logger.info(f"Файл загружен: {local_path} -> s3://{bucket_name}/{key}")
         return key
 
