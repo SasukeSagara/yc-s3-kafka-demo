@@ -45,7 +45,7 @@ class S3Client:
         """Создает или возвращает существующий S3 клиент"""
         if self._client is None:
             session = self._get_session()
-            self._client = session.client("s3", endpoint_url=self._endpoint_url)
+            self._client = session.client("s3", endpoint_url=self._endpoint_url, verify=False)
             logger.debug("S3 клиент создан")
         return self._client
 

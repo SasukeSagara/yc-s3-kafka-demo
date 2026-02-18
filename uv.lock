@@ -212,7 +212,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ya-cloud-s3-demo"
+name = "yc-s3-poller"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
