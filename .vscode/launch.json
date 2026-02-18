@@ -16,6 +16,14 @@
                 "AWS_REQUEST_CHECKSUM_CALCULATION":"WHEN_REQUIRED",
                 "AWS_RESPONSE_CHECKSUM_VALIDATION":"WHEN_REQUIRED"
             }
-        }
+        },
+        {
+            "name": "Python Debugger: Upload file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/upload_file.py",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
     ]
 }
