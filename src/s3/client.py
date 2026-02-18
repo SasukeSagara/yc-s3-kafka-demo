@@ -49,6 +49,31 @@ class S3Client:
             logger.debug("S3 клиент создан")
         return self._client
 
+    def upload_file(
+        self, bucket_name: str, local_path: str, object_key: str | None = None
+    ) -> str:
+        """
+        Загружает файл в S3 бакет.
+
+        Args:
+            bucket_name: Имя бакета
+            local_path: Путь к локальному файлу
+            object_key: Ключ объекта в S3 (если не указан — используется имя файла)
+
+        Returns:
+            Ключ загруженного объекта в S3
+        """
+        from pathlib import Path
+
+        path = Path(local_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Файл не найден: {local_path}")
+        key = object_key if object_key is not None else path.name
+        client = self.get_client()
+        client.upload_file(str(path), bucket_name, key)
+        logger.info(f"Файл загружен: {local_path} -> s3://{bucket_name}/{key}")
+        return key
+
     def generate_presigned_url(
         self, bucket_name: str, key: str, expiration: int = 3600
     ) -> str:
