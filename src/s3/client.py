@@ -1,12 +1,43 @@
 """Клиент для работы с S3"""
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from boto3.session import Session as BotoSession
 from botocore.client import BaseClient
 
 logger = logging.getLogger(__name__)
+
+
+class _UnseekableReader:
+    """Обёртка над файлом без seek(), чтобы boto3 отправлял x-amz-content-sha256: UNSIGNED-PAYLOAD (совместимость с Yandex Object Storage и др.)."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._size = path.stat().st_size
+        self._file = open(path, "rb")
+
+    def read(self, size: int = -1) -> bytes:
+        return self._file.read(size)
+
+    def __len__(self) -> int:
+        return self._size
+
+    def __enter__(self) -> "_UnseekableReader":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self._file.close()
+
+    def __iter__(self) -> "_UnseekableReader":
+        return self
+
+    def __next__(self) -> bytes:
+        chunk = self._file.read(8192)
+        if not chunk:
+            raise StopIteration
+        return chunk
 
 
 class S3Client:
@@ -45,7 +76,9 @@ class S3Client:
         """Создает или возвращает существующий S3 клиент"""
         if self._client is None:
             session = self._get_session()
-            self._client = session.client("s3", endpoint_url=self._endpoint_url, verify=False)
+            self._client = session.client(
+                "s3", endpoint_url=self._endpoint_url, verify=False
+            )
             logger.debug("S3 клиент создан")
         return self._client
 
@@ -55,6 +88,10 @@ class S3Client:
         """
         Загружает файл в S3 бакет.
 
+        Используется put_object с потоком без seek(), чтобы отправлять
+        x-amz-content-sha256: UNSIGNED-PAYLOAD для совместимости с Yandex Object Storage
+        и другими S3-совместимыми бэкендами.
+
         Args:
             bucket_name: Имя бакета
             local_path: Путь к локальному файлу
@@ -63,14 +100,19 @@ class S3Client:
         Returns:
             Ключ загруженного объекта в S3
         """
-        from pathlib import Path
-
         path = Path(local_path)
         if not path.is_file():
             raise FileNotFoundError(f"Файл не найден: {local_path}")
         key = object_key if object_key is not None else path.name
         client = self.get_client()
-        client.upload_file(str(path), bucket_name, key)
+        size = path.stat().st_size
+        with _UnseekableReader(path) as body:
+            client.put_object(
+                Bucket=bucket_name,
+                Key=key,
+                Body=body,
+                ContentLength=size,
+            )
         logger.info(f"Файл загружен: {local_path} -> s3://{bucket_name}/{key}")
         return key
 
