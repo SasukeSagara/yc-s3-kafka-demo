@@ -3,11 +3,13 @@
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
-from src.kafka_m import KafkaProducerClient
 from src.s3.client import S3Client
 from src.s3.scanner import S3Scanner
+
+if TYPE_CHECKING:
+    from src.kafka_m import KafkaProducerClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ class S3Poller:
         self,
         s3_client: S3Client,
         bucket_name: str,
-        kafka_producer: KafkaProducerClient,
+        kafka_producer: "KafkaProducerClient | None",
         poll_interval: int = 60,
         file_link_expiration: int = 3600,
     ):
@@ -29,7 +31,7 @@ class S3Poller:
         Args:
             s3_client: Клиент для работы с S3
             bucket_name: Имя бакета для сканирования
-            kafka_producer: Клиент для отправки сообщений в Kafka
+            kafka_producer: Клиент для отправки сообщений в Kafka (None — не отправлять в Kafka)
             poll_interval: Интервал сканирования в секундах
             file_link_expiration: Время жизни presigned URL в секундах
         """
@@ -69,8 +71,8 @@ class S3Poller:
                     logger.info(f"Найдено {len(updated_files)} обновленных файлов:")
                     self._process_files(updated_files)
 
-                    # Отправляем в Kafka
-                    self._kafka_producer.send_files(updated_files)
+                    if self._kafka_producer is not None:
+                        self._kafka_producer.send_files(updated_files)
                 else:
                     logger.debug("Новых файлов не найдено")
 

@@ -36,10 +36,14 @@ class Configuration(BaseSettings):
         description="Время жизни presigned URL в секундах (по умолчанию 1 час)",
     )
 
-    # Настройки Kafka
-    kafka_brokers: str = Field(..., description="Список Kafka брокеров через запятую")
-    kafka_topic: str = Field(
-        ..., description="Имя Kafka топика для отправки уведомлений"
+    # Настройки Kafka (опционально: если не указаны — уведомления в Kafka не отправляются)
+    kafka_brokers: str | None = Field(
+        default=None,
+        description="Список Kafka брокеров через запятую (пусто — Kafka не используется)",
+    )
+    kafka_topic: str | None = Field(
+        default=None,
+        description="Имя Kafka топика для отправки уведомлений",
     )
 
     # Настройки логирования
@@ -66,8 +70,15 @@ class Configuration(BaseSettings):
 
     @property
     def kafka_brokers_list(self) -> list[str]:
-        """Возвращает список Kafka брокеров"""
+        """Возвращает список Kafka брокеров (пустой список, если Kafka не настроен)"""
+        if not self.kafka_brokers:
+            return []
         return [broker.strip() for broker in self.kafka_brokers.split(",")]
+
+    @property
+    def kafka_enabled(self) -> bool:
+        """True, если заданы и брокеры, и топик — тогда Kafka используется."""
+        return bool(self.kafka_brokers and self.kafka_topic)
 
 
 CONFIG = Configuration()
