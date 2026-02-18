@@ -1,6 +1,8 @@
 """Поллер для периодического сканирования S3 бакета"""
 
+import json
 import logging
+import sys
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
@@ -73,6 +75,8 @@ class S3Poller:
 
                     if self._kafka_producer is not None:
                         self._kafka_producer.send_files(updated_files)
+                    else:
+                        self._echo_message_to_console(updated_files)
                 else:
                     logger.debug("Новых файлов не найдено")
 
@@ -90,6 +94,22 @@ class S3Poller:
         except Exception as e:
             logger.error(f"Критическая ошибка в поллере: {e}", exc_info=True)
             raise
+
+    def _echo_message_to_console(self, files: List[Dict[str, Any]]) -> None:
+        """
+        Выводит в stdout сообщение в том же формате, что ушло бы в Kafka
+        (когда Kafka не настроен).
+        """
+        message: Dict[str, Any] = {
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "files": files,
+            "count": len(files),
+        }
+        print(
+            json.dumps(message, ensure_ascii=False, indent=2),
+            file=sys.stdout,
+            flush=True,
+        )
 
     def _process_files(self, files: List[Dict[str, Any]]) -> None:
         """
