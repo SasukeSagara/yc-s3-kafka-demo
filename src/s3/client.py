@@ -6,8 +6,13 @@ from typing import Optional
 
 from boto3.session import Session as BotoSession
 from botocore.client import BaseClient
+from botocore.config import Config
 
 logger = logging.getLogger(__name__)
+
+# Конфиг S3: отключаем подпись payload, чтобы отправлять x-amz-content-sha256: UNSIGNED-PAYLOAD
+# (требуется для части S3-совместимых бэкендов: Yandex Object Storage, MinIO за прокси и др.)
+_S3_CONFIG = Config(s3={"payload_signing_enabled": False})
 
 
 class _UnseekableReader:
@@ -77,7 +82,10 @@ class S3Client:
         if self._client is None:
             session = self._get_session()
             self._client = session.client(
-                "s3", endpoint_url=self._endpoint_url, verify=False
+                "s3",
+                endpoint_url=self._endpoint_url,
+                verify=False,
+                config=_S3_CONFIG,
             )
             logger.debug("S3 клиент создан")
         return self._client

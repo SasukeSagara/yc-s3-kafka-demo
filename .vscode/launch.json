@@ -12,7 +12,9 @@
             "program": "${workspaceFolder}/main.py",
             "console": "integratedTerminal",
             "env": {
-                "PYTHONWARNINGS": "ignore:Unverified HTTPS request"
+                "PYTHONWARNINGS": "ignore:Unverified HTTPS request",
+                "AWS_REQUEST_CHECKSUM_CALCULATION":"WHEN_REQUIRED",
+                "AWS_RESPONSE_CHECKSUM_VALIDATION":"WHEN_REQUIRED"
             }
         }
     ]
